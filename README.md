@@ -1,6 +1,6 @@
 # Multi-Source Financial Portfolio Aggregator
 
-A full-stack application that aggregates financial data from three sources (Orders, MF Central, Account Aggregator), deduplicates overlapping records, and presents a comprehensive investment portfolio dashboard.
+A full-stack application that aggregates financial data from three sources (Orders, MF Central, Account Aggregator), deduplicates overlapping records, and presents a comprehensive investment portfolio dashboard with analytics.
 
 **Stack:** FastAPI (Python 3.11) + React 18 (Vite) + Docker
 
@@ -86,7 +86,7 @@ FinancialPortfolioAggregator/
 │   │   ├── main.py       # App entry point
 │   │   ├── config.py     # File paths + settings
 │   │   ├── api/v1/       # REST endpoints
-│   │   ├── services/     # Data parsing + aggregation logic
+│   │   ├── services/     # Data parsing + aggregation + analytics logic
 │   │   └── models/       # Pydantic response models
 │   ├── data/             # JSON source files
 │   ├── Dockerfile
@@ -95,8 +95,9 @@ FinancialPortfolioAggregator/
 │   ├── src/
 │   │   ├── api/          # All Axios API calls
 │   │   ├── components/   # Reusable UI components
+│   │   ├── context/      # React context (global user selection state)
 │   │   ├── pages/        # Full page views
-│   │   └── utils/        # Formatters (currency, date)
+│   │   └── utils/        # Formatters (currency, date, badges)
 │   ├── Dockerfile
 │   └── package.json
 ├── docker-compose.yml
@@ -107,17 +108,91 @@ FinancialPortfolioAggregator/
 
 ## API Endpoints
 
+### Portfolio
+
+| Method | Endpoint | Query Params | Description |
+|--------|----------|-------------|-------------|
+| GET | `/api/v1/portfolio/summary` | `user_id` | Net worth + asset class breakdown |
+| GET | `/api/v1/portfolio/holdings` | `user_id` | All holdings (MF, Equity, Deposits) |
+| GET | `/api/v1/portfolio/allocation` | `user_id` | Allocation % for pie chart |
+
+### Transactions
+
+| Method | Endpoint | Query Params | Description |
+|--------|----------|-------------|-------------|
+| GET | `/api/v1/transactions` | `user_id`, `asset_type`, `action`, `source`, `limit`, `offset` | Unified deduplicated transaction list |
+| GET | `/api/v1/orders` | — | Order history (global, not per-user) |
+
+### Analytics
+
+| Method | Endpoint | Query Params | Description |
+|--------|----------|-------------|-------------|
+| GET | `/api/v1/analytics/pnl` | `user_id` | Total invested / current value / gain / return % |
+| GET | `/api/v1/analytics/monthly-investments` | `user_id` | Monthly BUY amounts (last 12 months) |
+| GET | `/api/v1/analytics/transaction-types` | `user_id` | MF transaction type breakdown (SIP/Purchase/Switch/etc.) |
+| GET | `/api/v1/analytics/sip-summary` | `user_id` | SIP schemes, monthly amount, installments |
+| GET | `/api/v1/analytics/amc-exposure` | `user_id` | MF value grouped by fund house (AMC) |
+| GET | `/api/v1/analytics/deposit-cashflow` | `user_id` | Credit vs Debit per deposit account |
+
+### Users & Other
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
+| GET | `/api/v1/users` | List of all users (id, name, email) |
+| GET | `/api/v1/deduplication/report` | Deduplication evidence (`user_id` param supported) |
 | GET | `/api/v1/health` | Health check |
-| GET | `/api/v1/portfolio/summary` | Net worth + asset class breakdown |
-| GET | `/api/v1/portfolio/holdings` | All holdings (MF, Equity, Deposits) |
-| GET | `/api/v1/portfolio/allocation` | Allocation % for pie chart |
-| GET | `/api/v1/transactions` | Unified deduplicated transaction list |
-| GET | `/api/v1/orders` | Order history |
-| GET | `/api/v1/deduplication/report` | Deduplication evidence |
+
+> All endpoints that accept `user_id` default to `"all"` when the parameter is omitted, returning aggregated data across all 7 users.
 
 Full interactive docs available at `http://localhost:8000/docs` when running.
+
+---
+
+## Multi-User Support
+
+The dataset contains **7 users** (assignment_user01 through assignment_user07), each with independent portfolios spanning mutual funds, equities, and deposit accounts.
+
+The **user selector** in the top navigation bar lets you switch between:
+- **All Users** (default) — aggregates all 7 portfolios into a combined view
+- **Individual users** — filters every page and all analytics to that user only
+
+When viewing "All Users", all API calls pass `user_id=all`. When a specific user is selected, all calls pass that user's ID. The selection is stored in React context (`UserContext`) so every page and component reacts to it automatically without prop drilling.
+
+---
+
+## Features
+
+### Dashboard (`/`)
+- **P&L Summary Row** — Total Invested / Current Value / Absolute Gain / Total Return %
+- **Net Worth Card** — Gradient card with per-class (MF / Equity / Deposit) breakdown bars
+- **Asset Allocation Chart** — Recharts donut chart with hover tooltips
+- **Stats Row** — Holdings count / Transaction count / Accounts count
+- **Holdings Spotlight** — Top 5 MF holdings + Top 5 Equity holdings, ranked by value with proportional bars
+- **Monthly Investment Trend** — Bar chart of BUY amounts per month (last 12 months)
+- **Transaction Type Breakdown** — Donut chart of SIP / Purchase / Switch / Lump Sum / Dividend Reinvest
+- **SIP Analysis Widget** — Active SIP count, estimated monthly amount, total installments, scheme list
+- **AMC Exposure Chart** — Horizontal bars showing MF value per fund house
+- **Deposit Cash Flow** — Credit vs Debit per account with net cashflow and Surplus/Deficit badge
+- **Recent Activity Feed** — Last 8 transactions across all sources in timeline style
+- **Quick Links** — Cards linking to Holdings, Transactions, Deduplication pages
+
+### Holdings (`/holdings`)
+- Mutual Fund holdings table with **P&L columns** (Invested ₹ / Gain ₹ / Return %) — color-coded
+- Equity holdings table
+- Bank deposit accounts table
+- Order history table
+- Tab switcher to navigate between asset types
+
+### Transactions (`/transactions`)
+- Unified deduplicated transaction list across all three sources
+- Filters: asset type, action (BUY/SELL), source
+- Color-coded BUY (green) / SELL (red) action badges
+- Pagination (50 per page)
+
+### Deduplication Evidence (`/deduplication`)
+- Stats bar: MF Central count, AA count, overlaps found, records removed, final count
+- Strategy explanation (ISIN-based dedup + AA tie-break rule)
+- Side-by-side field comparison table per overlapping ISIN
 
 ---
 
@@ -138,14 +213,13 @@ Both sources carry an `isin` field on every MF record. ISINs are globally unique
 
 **2. Tie-break rule: Account Aggregator (AA) data takes precedence**
 
-When an ISIN is found in both MF Central and AA, the AA record is used for:
-- Current holdings value (`currentValue`)
-- Units held (`closingUnits`)
-- NAV
+When an ISIN is found in both MF Central and AA, the AA record is used for current holdings value, units, and NAV. The MF Central record is flagged as a duplicate and excluded from net worth calculation.
 
-The MF Central record is flagged as a duplicate and excluded from net worth calculation.
+**3. Multi-user ISIN aggregation**
 
-**3. Transaction-level dedup**
+In "All Users" mode, the same ISIN appears once per user in AA data (e.g. 7 entries for the same fund). The deduplication logic **sums** `current_value` across all user entries for the same ISIN before comparing against MF Central, preventing any single ISIN from being counted more than once in the final output.
+
+**4. Transaction-level dedup**
 
 For the unified transaction history, MF transactions are deduped using the composite key:
 ```
@@ -153,7 +227,7 @@ For the unified transaction history, MF transactions are deduped using the compo
 ```
 If both sources report the same trade on the same day for the same units, only the AA record is kept.
 
-**4. Net worth is safe from double-counting**
+**5. Net worth is safe from double-counting**
 
 ```
 Net Worth = Deposit Balances
@@ -169,29 +243,17 @@ Visit `/deduplication` in the UI or call `GET /api/v1/deduplication/report` to s
 
 ---
 
-## Features Implemented
+## P&L Calculation
 
-### Portfolio Dashboard
-- Total net worth (deduplicated across all sources)
-- Asset allocation pie chart (Mutual Funds / Equities / Deposits)
-- Per-asset-class value cards
+Cost basis is derived from **MF Central BUY transaction amounts** (`trxnAmount` where `trxnSign == "+"`), summed per ISIN. This is used instead of the AA `costValue` field which carries `0.0` in the test dataset.
 
-### Holdings
-- Mutual Fund holdings table (ISIN, scheme, units, NAV, current value, source badge)
-- Equity holdings table (ISIN, company, units, last traded price, current value)
-- Bank deposit accounts (masked account number, bank, balance, account type)
-- Order history (scheme, ISIN, amount, date, status)
+```
+cost_value    = sum of all BUY amounts for that ISIN (from MF Central)
+gain_loss     = current_value - cost_value
+gain_loss_pct = (gain_loss / cost_value) × 100
+```
 
-### Transactions
-- Unified deduplicated transaction list across all three sources
-- Filters: asset type, action (BUY/SELL), source, date range
-- Color-coded BUY (green) / SELL (red) action badges
-- Pagination
-
-### Deduplication Evidence
-- Stats: records before dedup, after dedup, how many removed
-- Table of ISINs found in multiple sources
-- Side-by-side view: MF Central entry vs AA entry vs Final merged entry
+These fields are attached to each `MFHolding` and surfaced both in the P&L Summary Row on the dashboard and in the Invested / Gain / Return columns of the MF holdings table.
 
 ---
 
