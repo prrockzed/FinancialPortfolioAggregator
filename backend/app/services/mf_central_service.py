@@ -90,6 +90,18 @@ def get_transactions(user_email: str = "all") -> List[UnifiedTransaction]:
     return transactions
 
 
+def get_raw_transactions(user_email: str = "all") -> list:
+    """Return raw transaction dicts from mf_central.json (preserves trxnTypeFlag etc.)."""
+    raw = _load_raw()
+    result = []
+    for user in raw.get("users", []):
+        if not _user_matches(user, user_email):
+            continue
+        for data_block in user.get("validateQRCode", {}).get("data", []):
+            result.extend(data_block.get("dtTransaction", []))
+    return result
+
+
 def get_holdings(user_email: str = "all") -> List[MFHolding]:
     """
     Build a synthetic list of MF holdings from MF Central transaction history.

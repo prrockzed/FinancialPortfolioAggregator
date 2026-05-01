@@ -12,6 +12,9 @@ class MFHolding(BaseModel):
     current_value: float
     source: str                 # "aa" | "mf_central"
     is_deduplicated: bool = False   # True = this record was the winner after dedup
+    cost_value: Optional[float] = None      # Total invested (sum of BUY amounts from MF Central)
+    gain_loss: Optional[float] = None       # current_value - cost_value
+    gain_loss_pct: Optional[float] = None   # (gain_loss / cost_value) * 100
 
 
 class EquityHolding(BaseModel):

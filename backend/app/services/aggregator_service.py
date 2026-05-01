@@ -64,6 +64,15 @@ def _ensure_loaded(user_id: str):
     )
     dedup_mf_txns = _deduplicate_mf_transactions(mfc_transactions, aa_mf_txns)
 
+    # --- Annotate holdings with cost basis from MF Central BUY amounts ---
+    cost_basis = _build_cost_basis(mfc_transactions)
+    for h in dedup_mf_holdings:
+        if h.isin in cost_basis:
+            h.cost_value = round(cost_basis[h.isin], 2)
+            h.gain_loss = round(h.current_value - h.cost_value, 2)
+            if h.cost_value > 0:
+                h.gain_loss_pct = round((h.gain_loss / h.cost_value) * 100, 2)
+
     # --- Unified transactions ---
     all_txns = dedup_mf_txns + deposit_txns + equity_txns
     all_txns.sort(key=lambda t: t.date, reverse=True)
@@ -91,7 +100,20 @@ def _deduplicate_mf_holdings(
     mfc_holdings: List[MFHolding],
     aa_holdings: List[MFHolding],
 ) -> Tuple[List[MFHolding], DeduplicationReport]:
-    aa_isin_map: Dict[str, MFHolding] = {h.isin: h for h in aa_holdings}
+    # Sum current_value across users with the same ISIN in AA.
+    # In single-user mode: each ISIN appears once → no change.
+    # In "all" mode: same ISIN from 7 users → values are summed to match
+    # MFC which already sums units across all users.
+    aa_isin_map: Dict[str, MFHolding] = {}
+    for h in aa_holdings:
+        if h.isin in aa_isin_map:
+            existing = aa_isin_map[h.isin]
+            aa_isin_map[h.isin] = existing.model_copy(
+                update={"current_value": round(existing.current_value + h.current_value, 2)}
+            )
+        else:
+            aa_isin_map[h.isin] = h
+
     mfc_isin_map: Dict[str, MFHolding] = {h.isin: h for h in mfc_holdings}
 
     overlapping_isins = set(aa_isin_map.keys()) & set(mfc_isin_map.keys())
@@ -129,7 +151,7 @@ def _deduplicate_mf_holdings(
             )
         )
 
-    final_holdings: List[MFHolding] = list(aa_holdings)
+    final_holdings: List[MFHolding] = list(aa_isin_map.values())
     for isin, holding in mfc_isin_map.items():
         if isin not in aa_isin_map:
             final_holdings.append(holding)
@@ -166,6 +188,15 @@ def _deduplicate_mf_transactions(
         deduplicated.append(t)
 
     return deduplicated
+
+
+def _build_cost_basis(mfc_transactions: List[UnifiedTransaction]) -> Dict[str, float]:
+    """Build {isin: total_buy_amount} from MF Central BUY transactions."""
+    cost_map: Dict[str, float] = {}
+    for t in mfc_transactions:
+        if t.isin and t.action == "BUY" and t.amount:
+            cost_map[t.isin] = cost_map.get(t.isin, 0.0) + t.amount
+    return cost_map
 
 
 def _orders_to_transactions(orders: List[OrderRecord]) -> List[UnifiedTransaction]:
