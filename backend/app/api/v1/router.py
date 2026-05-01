@@ -1,8 +1,9 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import portfolio, transactions, deduplication
+from app.api.v1.endpoints import portfolio, transactions, deduplication, users
 
 router = APIRouter()
 
+router.include_router(users.router)
 router.include_router(portfolio.router)
 router.include_router(transactions.router)
 router.include_router(deduplication.router)

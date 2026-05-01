@@ -25,11 +25,20 @@ def _map_deposit_action(txn_type: str) -> str:
     return "BUY" if txn_type == "DEBIT" else "SELL"
 
 
-def get_deposit_accounts() -> List[DepositAccount]:
+def _user_matches(user: dict, user_id: str) -> bool:
+    """Return True if the user should be included given the filter."""
+    if user_id == "all":
+        return True
+    return user.get("user", {}).get("userId") == user_id
+
+
+def get_deposit_accounts(user_id: str = "all") -> List[DepositAccount]:
     raw = _load_raw()
     accounts: List[DepositAccount] = []
 
     for user in raw.get("users", []):
+        if not _user_matches(user, user_id):
+            continue
         for account in user.get("accounts", []):
             summary = account.get("summary", {})
             if not isinstance(summary, dict):
@@ -53,11 +62,13 @@ def get_deposit_accounts() -> List[DepositAccount]:
     return accounts
 
 
-def get_deposit_transactions() -> List[UnifiedTransaction]:
+def get_deposit_transactions(user_id: str = "all") -> List[UnifiedTransaction]:
     raw = _load_raw()
     transactions: List[UnifiedTransaction] = []
 
     for user in raw.get("users", []):
+        if not _user_matches(user, user_id):
+            continue
         for account in user.get("accounts", []):
             profile_list = account.get("profile", [])
             if not profile_list:
@@ -89,11 +100,13 @@ def get_deposit_transactions() -> List[UnifiedTransaction]:
     return transactions
 
 
-def get_equity_holdings() -> List[EquityHolding]:
+def get_equity_holdings(user_id: str = "all") -> List[EquityHolding]:
     raw = _load_raw()
     holdings: List[EquityHolding] = []
 
     for user in raw.get("users", []):
+        if not _user_matches(user, user_id):
+            continue
         for account in user.get("accounts", []):
             summary_list = account.get("summary", [])
             if not isinstance(summary_list, list):
@@ -115,11 +128,13 @@ def get_equity_holdings() -> List[EquityHolding]:
     return holdings
 
 
-def get_equity_transactions() -> List[UnifiedTransaction]:
+def get_equity_transactions(user_id: str = "all") -> List[UnifiedTransaction]:
     raw = _load_raw()
     transactions: List[UnifiedTransaction] = []
 
     for user in raw.get("users", []):
+        if not _user_matches(user, user_id):
+            continue
         for account in user.get("accounts", []):
             profile_list = account.get("profile", [])
             if not profile_list:
@@ -151,11 +166,13 @@ def get_equity_transactions() -> List[UnifiedTransaction]:
     return transactions
 
 
-def get_mf_holdings() -> List[MFHolding]:
+def get_mf_holdings(user_id: str = "all") -> List[MFHolding]:
     raw = _load_raw()
     holdings: List[MFHolding] = []
 
     for user in raw.get("users", []):
+        if not _user_matches(user, user_id):
+            continue
         for account in user.get("accounts", []):
             summary_list = account.get("summary", [])
             if not isinstance(summary_list, list):
@@ -181,11 +198,13 @@ def get_mf_holdings() -> List[MFHolding]:
     return holdings
 
 
-def get_mf_transactions() -> List[UnifiedTransaction]:
+def get_mf_transactions(user_id: str = "all") -> List[UnifiedTransaction]:
     raw = _load_raw()
     transactions: List[UnifiedTransaction] = []
 
     for user in raw.get("users", []):
+        if not _user_matches(user, user_id):
+            continue
         for account in user.get("accounts", []):
             profile_list = account.get("profile", [])
             if not profile_list:
@@ -218,25 +237,19 @@ def get_mf_transactions() -> List[UnifiedTransaction]:
     return transactions
 
 
-def get_all() -> Tuple[
+def get_all(user_id: str = "all") -> Tuple[
     List[DepositAccount],
     List[EquityHolding],
     List[MFHolding],
     List[UnifiedTransaction],
     List[UnifiedTransaction],
     List[UnifiedTransaction],
-    List[UnifiedTransaction],
 ]:
-    """
-    Convenience function: returns all parsed AA data in one call.
-    Returns: (deposit_accounts, equity_holdings, mf_holdings,
-              deposit_txns, equity_txns, mf_txns)
-    """
     return (
-        get_deposit_accounts(),
-        get_equity_holdings(),
-        get_mf_holdings(),
-        get_deposit_transactions(),
-        get_equity_transactions(),
-        get_mf_transactions(),
+        get_deposit_accounts(user_id),
+        get_equity_holdings(user_id),
+        get_mf_holdings(user_id),
+        get_deposit_transactions(user_id),
+        get_equity_transactions(user_id),
+        get_mf_transactions(user_id),
     )

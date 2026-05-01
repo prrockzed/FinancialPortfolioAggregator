@@ -8,6 +8,7 @@ router = APIRouter(tags=["transactions"])
 
 @router.get("/transactions", response_model=List[UnifiedTransaction])
 def get_transactions(
+    user_id: str = Query(default="all", description="User ID or 'all' for combined view"),
     asset_type: Optional[str] = Query(
         None,
         description="Filter by asset type: deposit | equities | mutual_fund | order",
@@ -20,12 +21,8 @@ def get_transactions(
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     limit: int = Query(50, ge=1, le=500, description="Records per page"),
 ):
-    """
-    Returns a unified, deduplicated list of transactions across all three sources.
-    Supports filtering by asset type, action, and source.
-    Results are sorted newest-first.
-    """
     all_txns = aggregator_service.get_transactions(
+        user_id=user_id,
         asset_type=asset_type,
         action=action,
         source=source,
@@ -38,6 +35,6 @@ def get_transactions(
 def get_orders():
     """
     Returns the full order history from order.json.
-    All orders are BUY (type='p' = purchase).
+    Orders are global (no per-user linkage available in order.json).
     """
     return aggregator_service.get_orders()

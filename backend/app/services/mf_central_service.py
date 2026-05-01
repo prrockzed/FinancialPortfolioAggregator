@@ -32,15 +32,36 @@ def _map_action(trxn_sign: str) -> str:
     return "BUY" if trxn_sign == "+" else "SELL"
 
 
-def get_transactions() -> List[UnifiedTransaction]:
+def _get_user_email(user: dict) -> str:
+    """Extract email from a user's dtStatic block."""
+    qr_data = user.get("validateQRCode", {})
+    for data_block in qr_data.get("data", []):
+        static = data_block.get("dtStatic", [])
+        if isinstance(static, list) and static:
+            return static[0].get("email", "")
+        elif isinstance(static, dict):
+            return static.get("email", "")
+    return ""
+
+
+def _user_matches(user: dict, user_email: str) -> bool:
+    """Return True if this MF Central user matches the filter."""
+    if user_email == "all":
+        return True
+    return _get_user_email(user) == user_email
+
+
+def get_transactions(user_email: str = "all") -> List[UnifiedTransaction]:
     """
     Extract all MF transactions from mf_central.json.
-    Returns a flat list of UnifiedTransaction objects.
+    Pass user_email='all' for all users, or a specific email to filter.
     """
     raw = _load_raw()
     transactions: List[UnifiedTransaction] = []
 
     for user in raw.get("users", []):
+        if not _user_matches(user, user_email):
+            continue
         qr_data = user.get("validateQRCode", {})
         for data_block in qr_data.get("data", []):
             for trxn in data_block.get("dtTransaction", []):
@@ -69,11 +90,11 @@ def get_transactions() -> List[UnifiedTransaction]:
     return transactions
 
 
-def get_holdings() -> List[MFHolding]:
+def get_holdings(user_email: str = "all") -> List[MFHolding]:
     """
     Build a synthetic list of MF holdings from MF Central transaction history.
     We sum up units per ISIN (BUY adds units, SELL subtracts).
-    We also capture the latest scheme name and AMC per ISIN.
+    Pass user_email='all' for all users, or a specific email to filter.
     """
     raw = _load_raw()
 
@@ -81,6 +102,8 @@ def get_holdings() -> List[MFHolding]:
     holding_map: Dict[str, Dict[str, Any]] = {}
 
     for user in raw.get("users", []):
+        if not _user_matches(user, user_email):
+            continue
         qr_data = user.get("validateQRCode", {})
         for data_block in qr_data.get("data", []):
             for trxn in data_block.get("dtTransaction", []):

@@ -2,15 +2,18 @@
 aggregator_service.py
 
 The central orchestrator. It:
-  1. Calls all three data parsers
+  1. Calls all three data parsers (optionally filtered to a single user)
   2. Deduplicates MF holdings (AA wins over MF Central on ISIN conflicts)
   3. Computes net worth without double-counting
   4. Merges transactions from all sources into one unified list
   5. Produces the deduplication report for the /deduplication/report endpoint
+
+user_id = "all"  → aggregate data from all 7 users (default)
+user_id = "pivot_asgmt_user_001"  → filter to that specific user only
 """
 
 from typing import List, Tuple, Dict
-from app.services import order_service, mf_central_service, aa_service
+from app.services import order_service, mf_central_service, aa_service, user_service
 from app.models.transaction import UnifiedTransaction, OrderRecord
 from app.models.holding import MFHolding, EquityHolding, DepositAccount
 from app.models.portfolio import (
@@ -24,19 +27,27 @@ from app.models.portfolio import (
 
 
 # ---------------------------------------------------------------------------
-# Module-level cache (loaded once at startup, reused on every request)
+# Module-level cache keyed by user_id ("all" or a specific userId)
 # ---------------------------------------------------------------------------
-_cache: Dict = {}
+_cache: Dict[str, Dict] = {}
 
 
-def _ensure_loaded():
-    if _cache:
+def _ensure_loaded(user_id: str):
+    if user_id in _cache:
         return
 
+    # Resolve email filter for MF Central
+    # When user_id == "all", pass "all" → no filtering
+    # When specific, look up the corresponding email
+    if user_id == "all":
+        mfc_email = "all"
+    else:
+        mfc_email = user_service.get_user_email(user_id)
+
     # --- Parse all sources ---
-    orders = order_service.get_orders()
-    mfc_transactions = mf_central_service.get_transactions()
-    mfc_holdings = mf_central_service.get_holdings()
+    orders = order_service.get_orders()  # orders are global (no user linkage in order.json)
+    mfc_transactions = mf_central_service.get_transactions(mfc_email)
+    mfc_holdings = mf_central_service.get_holdings(mfc_email)
 
     (
         deposit_accounts,
@@ -45,7 +56,7 @@ def _ensure_loaded():
         deposit_txns,
         equity_txns,
         aa_mf_txns,
-    ) = aa_service.get_all()
+    ) = aa_service.get_all(user_id)
 
     # --- Deduplication ---
     dedup_mf_holdings, dedup_report = _deduplicate_mf_holdings(
@@ -57,16 +68,19 @@ def _ensure_loaded():
     all_txns = dedup_mf_txns + deposit_txns + equity_txns
     all_txns.sort(key=lambda t: t.date, reverse=True)
 
-    # --- Order transactions (from order.json converted to UnifiedTransaction) ---
+    # --- Order transactions (global, not per-user) ---
     order_txns = _orders_to_transactions(orders)
 
-    _cache["orders"] = orders
-    _cache["deposit_accounts"] = deposit_accounts
-    _cache["equity_holdings"] = equity_holdings
-    _cache["mf_holdings"] = dedup_mf_holdings          # deduplicated
-    _cache["transactions"] = all_txns
-    _cache["order_transactions"] = order_txns
-    _cache["dedup_report"] = dedup_report
+    _cache[user_id] = {
+        "orders": orders,
+        "deposit_accounts": deposit_accounts,
+        "equity_holdings": equity_holdings,
+        "mf_holdings": dedup_mf_holdings,
+        "transactions": all_txns,
+        "order_transactions": order_txns,
+        "dedup_report": dedup_report,
+        "mfc_email": mfc_email,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -77,16 +91,6 @@ def _deduplicate_mf_holdings(
     mfc_holdings: List[MFHolding],
     aa_holdings: List[MFHolding],
 ) -> Tuple[List[MFHolding], DeduplicationReport]:
-    """
-    Merge MF Central and AA mutual fund holdings.
-
-    Strategy:
-    - Build a set of ISINs from the AA holdings (AA takes precedence).
-    - Any MF Central holding whose ISIN is already in AA is flagged as duplicate.
-    - MF Central holdings with ISINs NOT in AA are included (no overlap).
-
-    Returns the deduplicated list and a DeduplicationReport.
-    """
     aa_isin_map: Dict[str, MFHolding] = {h.isin: h for h in aa_holdings}
     mfc_isin_map: Dict[str, MFHolding] = {h.isin: h for h in mfc_holdings}
 
@@ -125,7 +129,6 @@ def _deduplicate_mf_holdings(
             )
         )
 
-    # Build deduplicated list: AA holdings + MF Central holdings not in AA
     final_holdings: List[MFHolding] = list(aa_holdings)
     for isin, holding in mfc_isin_map.items():
         if isin not in aa_isin_map:
@@ -147,14 +150,6 @@ def _deduplicate_mf_transactions(
     mfc_txns: List[UnifiedTransaction],
     aa_mf_txns: List[UnifiedTransaction],
 ) -> List[UnifiedTransaction]:
-    """
-    Merge MF Central and AA mutual fund transactions.
-
-    Dedup key: (isin, date, normalized_units)
-    When both sources report the same trade, keep the AA record and mark the
-    MF Central record as a duplicate (is_duplicate=True, excluded from output).
-    """
-    # Build a set of keys from AA MF transactions
     aa_keys = set()
     for t in aa_mf_txns:
         if t.isin and t.date and t.units is not None:
@@ -167,7 +162,6 @@ def _deduplicate_mf_transactions(
         if t.isin and t.date and t.units is not None:
             key = (t.isin, t.date, round(t.units, 3))
             if key in aa_keys:
-                # Duplicate — skip (AA record is already in deduplicated)
                 continue
         deduplicated.append(t)
 
@@ -198,13 +192,14 @@ def _orders_to_transactions(orders: List[OrderRecord]) -> List[UnifiedTransactio
 # Public API — used by endpoint handlers
 # ---------------------------------------------------------------------------
 
-def get_portfolio_summary() -> PortfolioSummary:
-    _ensure_loaded()
+def get_portfolio_summary(user_id: str = "all") -> PortfolioSummary:
+    _ensure_loaded(user_id)
+    data = _cache[user_id]
 
-    deposit_accounts: List[DepositAccount] = _cache["deposit_accounts"]
-    equity_holdings: List[EquityHolding] = _cache["equity_holdings"]
-    mf_holdings: List[MFHolding] = _cache["mf_holdings"]
-    transactions: List[UnifiedTransaction] = _cache["transactions"]
+    deposit_accounts: List[DepositAccount] = data["deposit_accounts"]
+    equity_holdings: List[EquityHolding] = data["equity_holdings"]
+    mf_holdings: List[MFHolding] = data["mf_holdings"]
+    transactions: List[UnifiedTransaction] = data["transactions"]
 
     deposits_total = sum(a.current_balance for a in deposit_accounts)
     equities_total = sum(h.current_value for h in equity_holdings)
@@ -234,18 +229,23 @@ def get_portfolio_summary() -> PortfolioSummary:
             ),
         ]
 
-    # Investor info from AA profile (first available)
+    # Investor info from AA profile
     investor_name = ""
     investor_email = ""
-    raw_users = aa_service._load_raw().get("users", [])
-    if raw_users:
-        user_obj = raw_users[0]
-        investor_email = user_obj.get("user", {}).get("email", "")
-        accounts = user_obj.get("accounts", [])
-        if accounts:
-            profiles = accounts[0].get("profile", [])
-            if profiles:
-                investor_name = profiles[0].get("name", "").strip()
+    if user_id == "all":
+        investor_name = "All Users"
+        investor_email = "7 portfolios combined"
+    else:
+        raw_users = aa_service._load_raw().get("users", [])
+        for u in raw_users:
+            if u.get("user", {}).get("userId") == user_id:
+                investor_email = u.get("user", {}).get("email", "")
+                for acc in u.get("accounts", []):
+                    profiles = acc.get("profile", [])
+                    if profiles:
+                        investor_name = profiles[0].get("name", "").strip()
+                        break
+                break
 
     return PortfolioSummary(
         net_worth=NetWorth(
@@ -263,27 +263,28 @@ def get_portfolio_summary() -> PortfolioSummary:
     )
 
 
-def get_holdings() -> HoldingsResponse:
-    _ensure_loaded()
+def get_holdings(user_id: str = "all") -> HoldingsResponse:
+    _ensure_loaded(user_id)
+    data = _cache[user_id]
     return HoldingsResponse(
-        mutual_funds=_cache["mf_holdings"],
-        equities=_cache["equity_holdings"],
-        deposits=_cache["deposit_accounts"],
+        mutual_funds=data["mf_holdings"],
+        equities=data["equity_holdings"],
+        deposits=data["deposit_accounts"],
     )
 
 
-def get_allocation() -> List[AssetAllocation]:
-    summary = get_portfolio_summary()
-    return summary.allocation
+def get_allocation(user_id: str = "all") -> List[AssetAllocation]:
+    return get_portfolio_summary(user_id).allocation
 
 
 def get_transactions(
+    user_id: str = "all",
     asset_type: str = None,
     action: str = None,
     source: str = None,
 ) -> List[UnifiedTransaction]:
-    _ensure_loaded()
-    txns = _cache["transactions"]
+    _ensure_loaded(user_id)
+    txns = _cache[user_id]["transactions"]
 
     if asset_type:
         txns = [t for t in txns if t.asset_type == asset_type]
@@ -296,10 +297,11 @@ def get_transactions(
 
 
 def get_orders() -> List[OrderRecord]:
-    _ensure_loaded()
-    return _cache["orders"]
+    # Orders are global (no per-user linkage in order.json)
+    _ensure_loaded("all")
+    return _cache["all"]["orders"]
 
 
-def get_deduplication_report() -> DeduplicationReport:
-    _ensure_loaded()
-    return _cache["dedup_report"]
+def get_deduplication_report(user_id: str = "all") -> DeduplicationReport:
+    _ensure_loaded(user_id)
+    return _cache[user_id]["dedup_report"]
