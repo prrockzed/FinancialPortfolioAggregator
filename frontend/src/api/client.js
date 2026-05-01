@@ -34,6 +34,26 @@ export const fetchOrders = () =>
 export const fetchDeduplicationReport = (userId = 'all') =>
   api.get('/deduplication/report', { params: { user_id: userId } }).then((r) => r.data)
 
+// ── Analytics ──────────────────────────────────────────────────────────────
+
+export const fetchPnL = (userId = 'all') =>
+  api.get('/analytics/pnl', { params: { user_id: userId } }).then((r) => r.data)
+
+export const fetchMonthlyInvestments = (userId = 'all') =>
+  api.get('/analytics/monthly-investments', { params: { user_id: userId } }).then((r) => r.data)
+
+export const fetchTransactionTypes = (userId = 'all') =>
+  api.get('/analytics/transaction-types', { params: { user_id: userId } }).then((r) => r.data)
+
+export const fetchSIPSummary = (userId = 'all') =>
+  api.get('/analytics/sip-summary', { params: { user_id: userId } }).then((r) => r.data)
+
+export const fetchAMCExposure = (userId = 'all') =>
+  api.get('/analytics/amc-exposure', { params: { user_id: userId } }).then((r) => r.data)
+
+export const fetchDepositCashflow = (userId = 'all') =>
+  api.get('/analytics/deposit-cashflow', { params: { user_id: userId } }).then((r) => r.data)
+
 // ── Health ─────────────────────────────────────────────────────────────────
 
 export const fetchHealth = () =>

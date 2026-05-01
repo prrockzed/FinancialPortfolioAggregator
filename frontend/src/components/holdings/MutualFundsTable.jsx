@@ -15,14 +15,19 @@ export default function MutualFundsTable({ holdings }) {
             <th className="text-left">AMC</th>
             <th className="text-right">Units</th>
             <th className="text-right">NAV</th>
+            <th className="text-right">Invested</th>
             <th className="text-right">Current Value</th>
-            <th className="text-right">% of MF</th>
+            <th className="text-right">Gain / Loss</th>
+            <th className="text-right">Return %</th>
             <th className="text-center">Source</th>
           </tr>
         </thead>
         <tbody>
           {holdings.map((h) => {
-            const pct = total > 0 ? ((h.current_value / total) * 100).toFixed(1) : '0.0'
+            const hasGL = h.gain_loss != null
+            const isGain = hasGL && h.gain_loss >= 0
+            const glColor = isGain ? 'text-emerald-400' : 'text-rose-400'
+
             return (
               <tr key={h.isin}>
                 <td>
@@ -31,13 +36,21 @@ export default function MutualFundsTable({ holdings }) {
                   </span>
                 </td>
                 <td className="max-w-xs">
-                  <span className="text-slate-200" title={h.scheme_name}>{truncate(h.scheme_name, 42)}</span>
+                  <span className="text-slate-200" title={h.scheme_name}>{truncate(h.scheme_name, 36)}</span>
                 </td>
                 <td className="text-slate-400 text-xs">{h.amc || '—'}</td>
                 <td className="text-right text-slate-300 font-mono text-sm">{formatNumber(h.units)}</td>
                 <td className="text-right text-slate-300 font-mono text-sm">{h.nav ? formatCurrency(h.nav) : '—'}</td>
+                <td className="text-right text-slate-400 font-mono text-sm">
+                  {h.cost_value != null ? formatCurrency(h.cost_value) : '—'}
+                </td>
                 <td className="text-right font-semibold text-indigo-400">{formatCurrency(h.current_value)}</td>
-                <td className="text-right text-slate-500 text-xs">{pct}%</td>
+                <td className={`text-right font-semibold text-sm ${hasGL ? glColor : 'text-slate-600'}`}>
+                  {hasGL ? `${isGain ? '+' : ''}${formatCurrency(h.gain_loss)}` : '—'}
+                </td>
+                <td className={`text-right font-semibold text-sm ${hasGL ? glColor : 'text-slate-600'}`}>
+                  {h.gain_loss_pct != null ? `${isGain ? '+' : ''}${h.gain_loss_pct.toFixed(2)}%` : '—'}
+                </td>
                 <td className="text-center">
                   <span className={`badge border ${
                     h.source === 'aa'
@@ -53,13 +66,13 @@ export default function MutualFundsTable({ holdings }) {
         </tbody>
         <tfoot>
           <tr>
-            <td colSpan={5} className="text-right text-slate-500 text-xs pt-4 border-t border-[#1e2a3a]">
+            <td colSpan={6} className="text-right text-slate-500 text-xs pt-4 border-t border-[#1e2a3a]">
               Total ({holdings.length} funds)
             </td>
             <td className="text-right font-bold text-white pt-4 border-t border-[#1e2a3a]">
               {formatCurrency(total)}
             </td>
-            <td colSpan={2} className="border-t border-[#1e2a3a]" />
+            <td colSpan={3} className="border-t border-[#1e2a3a]" />
           </tr>
         </tfoot>
       </table>

@@ -1,29 +1,62 @@
 import { useEffect, useState } from 'react'
-import { fetchPortfolioSummary } from '../api/client'
+import {
+  fetchPortfolioSummary,
+  fetchHoldings,
+  fetchTransactions,
+  fetchPnL,
+  fetchMonthlyInvestments,
+  fetchTransactionTypes,
+  fetchSIPSummary,
+  fetchAMCExposure,
+  fetchDepositCashflow,
+} from '../api/client'
 import { useUser } from '../context/UserContext'
-import NetWorthCard from '../components/dashboard/NetWorthCard'
-import AssetAllocationChart from '../components/dashboard/AssetAllocationChart'
-import StatsRow from '../components/dashboard/StatsRow'
-import Spinner from '../components/common/Spinner'
-import ErrorMessage from '../components/common/ErrorMessage'
+
+import NetWorthCard          from '../components/dashboard/NetWorthCard'
+import AssetAllocationChart  from '../components/dashboard/AssetAllocationChart'
+import StatsRow              from '../components/dashboard/StatsRow'
+import PnLSummaryRow         from '../components/dashboard/PnLSummaryRow'
+import Top5Holdings          from '../components/dashboard/Top5Holdings'
+import MonthlyInvestmentChart from '../components/dashboard/MonthlyInvestmentChart'
+import TransactionTypeChart  from '../components/dashboard/TransactionTypeChart'
+import SIPAnalysisWidget     from '../components/dashboard/SIPAnalysisWidget'
+import AMCExposureChart      from '../components/dashboard/AMCExposureChart'
+import DepositCashFlow       from '../components/dashboard/DepositCashFlow'
+import RecentActivityFeed    from '../components/dashboard/RecentActivityFeed'
+import Spinner               from '../components/common/Spinner'
+import ErrorMessage          from '../components/common/ErrorMessage'
 
 export default function DashboardPage() {
   const { selectedUserId } = useUser()
-  const [summary, setSummary] = useState(null)
+  const [data,    setData]    = useState(null)
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState(null)
 
   useEffect(() => {
     setLoading(true)
     setError(null)
-    fetchPortfolioSummary(selectedUserId)
-      .then(setSummary)
-      .catch(() => setError('Failed to load portfolio summary.'))
+    Promise.all([
+      fetchPortfolioSummary(selectedUserId),
+      fetchHoldings(selectedUserId),
+      fetchPnL(selectedUserId),
+      fetchMonthlyInvestments(selectedUserId),
+      fetchTransactionTypes(selectedUserId),
+      fetchSIPSummary(selectedUserId),
+      fetchAMCExposure(selectedUserId),
+      fetchDepositCashflow(selectedUserId),
+      fetchTransactions({ user_id: selectedUserId, limit: 8 }),
+    ])
+      .then(([summary, holdings, pnl, monthly, txnTypes, sip, amc, cashflow, recentTxns]) => {
+        setData({ summary, holdings, pnl, monthly, txnTypes, sip, amc, cashflow, recentTxns })
+      })
+      .catch(() => setError('Failed to load dashboard data.'))
       .finally(() => setLoading(false))
   }, [selectedUserId])
 
   if (loading) return <Spinner text="Aggregating portfolio…" />
   if (error)   return <ErrorMessage message={error} />
+
+  const { summary, holdings, pnl, monthly, txnTypes, sip, amc, cashflow, recentTxns } = data
 
   return (
     <div className="space-y-6">
@@ -35,9 +68,11 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      {/* Main grid */}
+      {/* P&L Summary Row */}
+      <PnLSummaryRow pnl={pnl} />
+
+      {/* Net Worth + Allocation */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Net Worth — spans 2 cols */}
         <div className="lg:col-span-2">
           <NetWorthCard
             netWorth={summary.net_worth}
@@ -45,8 +80,6 @@ export default function DashboardPage() {
             investorEmail={summary.investor_email}
           />
         </div>
-
-        {/* Allocation chart */}
         <div>
           <AssetAllocationChart allocation={summary.allocation} />
         </div>
@@ -55,42 +88,64 @@ export default function DashboardPage() {
       {/* Stats row */}
       <StatsRow summary={summary} />
 
+      {/* Top 5 Holdings */}
+      <div>
+        <SectionLabel>Holdings Spotlight</SectionLabel>
+        <Top5Holdings holdings={holdings} />
+      </div>
+
+      {/* Monthly Trend + Transaction Type */}
+      <div>
+        <SectionLabel>Investment Analytics</SectionLabel>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="lg:col-span-2">
+            <MonthlyInvestmentChart data={monthly} />
+          </div>
+          <div>
+            <TransactionTypeChart data={txnTypes} />
+          </div>
+        </div>
+      </div>
+
+      {/* SIP + AMC Exposure */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <SIPAnalysisWidget sip={sip} />
+        <AMCExposureChart data={amc} />
+      </div>
+
+      {/* Deposit Cash Flow + Recent Activity */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div>
+          <DepositCashFlow data={cashflow} />
+        </div>
+        <div className="lg:col-span-2">
+          <RecentActivityFeed transactions={recentTxns} />
+        </div>
+      </div>
+
       {/* Quick links */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <QuickLink
-          to="/holdings"
-          title="View Holdings"
-          desc="Mutual funds, equities, deposits &amp; orders broken down by asset class."
-          icon="◈"
-          color="indigo"
-        />
-        <QuickLink
-          to="/transactions"
-          title="Transaction History"
-          desc="Unified, deduplicated list of all transactions across every source."
-          icon="⇅"
-          color="cyan"
-        />
-        <QuickLink
-          to="/deduplication"
-          title="Deduplication Evidence"
-          desc="See exactly which records overlapped and how they were merged."
-          icon="⊕"
-          color="emerald"
-        />
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <QuickLink to="/holdings"      title="View Holdings"          desc="Full positions broken down by asset class." icon="◈" color="indigo" />
+        <QuickLink to="/transactions"  title="Transaction History"    desc="Unified, deduplicated list across all sources." icon="⇅" color="cyan" />
+        <QuickLink to="/deduplication" title="Deduplication Evidence" desc="Which records overlapped and how they were merged." icon="⊕" color="emerald" />
       </div>
     </div>
   )
 }
 
+function SectionLabel({ children }) {
+  return (
+    <p className="text-slate-500 text-xs uppercase tracking-wider font-semibold mb-3">{children}</p>
+  )
+}
+
 function QuickLink({ to, title, desc, icon, color }) {
   const colorMap = {
-    indigo:  { bg: 'bg-indigo-500/10', text: 'text-indigo-400', border: 'hover:border-indigo-500/40' },
-    cyan:    { bg: 'bg-cyan-500/10',   text: 'text-cyan-400',   border: 'hover:border-cyan-500/40' },
+    indigo:  { bg: 'bg-indigo-500/10',  text: 'text-indigo-400',  border: 'hover:border-indigo-500/40' },
+    cyan:    { bg: 'bg-cyan-500/10',    text: 'text-cyan-400',    border: 'hover:border-cyan-500/40' },
     emerald: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', border: 'hover:border-emerald-500/40' },
   }
   const c = colorMap[color]
-
   return (
     <a
       href={to}
