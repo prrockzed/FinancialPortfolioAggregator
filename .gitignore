@@ -113,3 +113,7 @@ Desktop.ini
 *.tmp
 *.bak
 *.orig
+
+# md files
+/*.md
+!/README.md
