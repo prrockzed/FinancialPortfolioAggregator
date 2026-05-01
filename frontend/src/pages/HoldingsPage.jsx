@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { fetchHoldings, fetchOrders } from '../api/client'
+import { useUser } from '../context/UserContext'
 import MutualFundsTable from '../components/holdings/MutualFundsTable'
 import EquitiesTable    from '../components/holdings/EquitiesTable'
 import DepositsTable    from '../components/holdings/DepositsTable'
@@ -23,6 +24,7 @@ const colorMap = {
 }
 
 export default function HoldingsPage() {
+  const { selectedUserId } = useUser()
   const [holdings, setHoldings] = useState(null)
   const [orders,   setOrders]   = useState([])
   const [loading,  setLoading]  = useState(true)
@@ -30,11 +32,13 @@ export default function HoldingsPage() {
   const [tab,      setTab]      = useState('mf')
 
   useEffect(() => {
-    Promise.all([fetchHoldings(), fetchOrders()])
+    setLoading(true)
+    setError(null)
+    Promise.all([fetchHoldings(selectedUserId), fetchOrders()])
       .then(([h, o]) => { setHoldings(h); setOrders(o) })
       .catch(() => setError('Failed to load holdings.'))
       .finally(() => setLoading(false))
-  }, [])
+  }, [selectedUserId])
 
   if (loading) return <Spinner text="Loading holdings…" />
   if (error)   return <ErrorMessage message={error} />

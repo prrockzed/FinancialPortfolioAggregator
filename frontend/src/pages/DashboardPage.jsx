@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { fetchPortfolioSummary } from '../api/client'
+import { useUser } from '../context/UserContext'
 import NetWorthCard from '../components/dashboard/NetWorthCard'
 import AssetAllocationChart from '../components/dashboard/AssetAllocationChart'
 import StatsRow from '../components/dashboard/StatsRow'
@@ -7,18 +8,21 @@ import Spinner from '../components/common/Spinner'
 import ErrorMessage from '../components/common/ErrorMessage'
 
 export default function DashboardPage() {
+  const { selectedUserId } = useUser()
   const [summary, setSummary] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState(null)
 
   useEffect(() => {
-    fetchPortfolioSummary()
+    setLoading(true)
+    setError(null)
+    fetchPortfolioSummary(selectedUserId)
       .then(setSummary)
       .catch(() => setError('Failed to load portfolio summary.'))
       .finally(() => setLoading(false))
-  }, [])
+  }, [selectedUserId])
 
-  if (loading) return <Spinner text="Aggregating your portfolio…" />
+  if (loading) return <Spinner text="Aggregating portfolio…" />
   if (error)   return <ErrorMessage message={error} />
 
   return (

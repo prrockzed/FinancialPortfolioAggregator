@@ -1,6 +1,9 @@
+import { useUser } from '../context/UserContext'
 import TransactionTable from '../components/transactions/TransactionTable'
 
 export default function TransactionsPage() {
+  const { selectedUserId } = useUser()
+
   return (
     <div className="space-y-6">
       <div>
@@ -9,7 +12,7 @@ export default function TransactionsPage() {
           Unified &amp; deduplicated across all three sources — sorted newest first.
         </p>
       </div>
-      <TransactionTable />
+      <TransactionTable userId={selectedUserId} />
     </div>
   )
 }

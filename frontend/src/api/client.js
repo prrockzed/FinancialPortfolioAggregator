@@ -5,16 +5,21 @@ const api = axios.create({
   timeout: 15000,
 })
 
+// ── Users ───────────────────────────────────────────────────────────────────
+
+export const fetchUsers = () =>
+  api.get('/users').then((r) => r.data)
+
 // ── Portfolio ──────────────────────────────────────────────────────────────
 
-export const fetchPortfolioSummary = () =>
-  api.get('/portfolio/summary').then((r) => r.data)
+export const fetchPortfolioSummary = (userId = 'all') =>
+  api.get('/portfolio/summary', { params: { user_id: userId } }).then((r) => r.data)
 
-export const fetchHoldings = () =>
-  api.get('/portfolio/holdings').then((r) => r.data)
+export const fetchHoldings = (userId = 'all') =>
+  api.get('/portfolio/holdings', { params: { user_id: userId } }).then((r) => r.data)
 
-export const fetchAllocation = () =>
-  api.get('/portfolio/allocation').then((r) => r.data)
+export const fetchAllocation = (userId = 'all') =>
+  api.get('/portfolio/allocation', { params: { user_id: userId } }).then((r) => r.data)
 
 // ── Transactions ───────────────────────────────────────────────────────────
 
@@ -26,8 +31,8 @@ export const fetchOrders = () =>
 
 // ── Deduplication ──────────────────────────────────────────────────────────
 
-export const fetchDeduplicationReport = () =>
-  api.get('/deduplication/report').then((r) => r.data)
+export const fetchDeduplicationReport = (userId = 'all') =>
+  api.get('/deduplication/report', { params: { user_id: userId } }).then((r) => r.data)
 
 // ── Health ─────────────────────────────────────────────────────────────────
 

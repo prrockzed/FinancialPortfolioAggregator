@@ -23,7 +23,7 @@ const SelectFilter = ({ label, value, onChange, options, labelMap = {} }) => (
   </div>
 )
 
-export default function TransactionTable() {
+export default function TransactionTable({ userId = 'all' }) {
   const [transactions, setTransactions] = useState([])
   const [loading, setLoading]           = useState(true)
   const [error, setError]               = useState(null)
@@ -38,7 +38,7 @@ export default function TransactionTable() {
   const load = useCallback(() => {
     setLoading(true)
     setError(null)
-    const params = { page, limit: LIMIT }
+    const params = { user_id: userId, page, limit: LIMIT }
     if (assetType) params.asset_type = assetType
     if (action)    params.action     = action
     if (source)    params.source     = source
@@ -47,12 +47,12 @@ export default function TransactionTable() {
       .then(setTransactions)
       .catch(() => setError('Failed to load transactions.'))
       .finally(() => setLoading(false))
-  }, [assetType, action, source, page])
+  }, [userId, assetType, action, source, page])
 
   useEffect(() => { load() }, [load])
 
-  // Reset to page 1 when filters change
-  useEffect(() => { setPage(1) }, [assetType, action, source])
+  // Reset to page 1 when filters or user change
+  useEffect(() => { setPage(1) }, [userId, assetType, action, source])
 
   return (
     <div className="space-y-4">

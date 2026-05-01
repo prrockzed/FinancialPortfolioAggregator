@@ -1,20 +1,24 @@
 import { useEffect, useState } from 'react'
 import { fetchDeduplicationReport } from '../api/client'
+import { useUser } from '../context/UserContext'
 import DeduplicationReport from '../components/deduplication/DeduplicationReport'
 import Spinner      from '../components/common/Spinner'
 import ErrorMessage from '../components/common/ErrorMessage'
 
 export default function DeduplicationPage() {
+  const { selectedUserId } = useUser()
   const [report,  setReport]  = useState(null)
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState(null)
 
   useEffect(() => {
-    fetchDeduplicationReport()
+    setLoading(true)
+    setError(null)
+    fetchDeduplicationReport(selectedUserId)
       .then(setReport)
       .catch(() => setError('Failed to load deduplication report.'))
       .finally(() => setLoading(false))
-  }, [])
+  }, [selectedUserId])
 
   if (loading) return <Spinner text="Building deduplication report…" />
   if (error)   return <ErrorMessage message={error} />
