@@ -1,0 +1,115 @@
+# =============================================================================
+# BACKEND — Python / FastAPI
+# =============================================================================
+
+# Virtual environments
+backend/venv/
+backend/.venv/
+backend/env/
+backend/.env/
+
+# Python bytecode cache
+**/__pycache__/
+**/*.py[cod]
+**/*.pyo
+
+# Distribution / packaging
+backend/*.egg-info/
+backend/dist/
+backend/build/
+backend/.eggs/
+
+# Environment variables
+backend/.env
+backend/.env.local
+backend/.env.*.local
+
+# pytest / coverage
+backend/.pytest_cache/
+backend/htmlcov/
+backend/.coverage
+backend/coverage.xml
+
+# mypy / pyright type checker
+backend/.mypy_cache/
+backend/.dmypy.json
+backend/pyrightconfig.json
+
+
+# =============================================================================
+# FRONTEND — React / Node
+# =============================================================================
+
+# Dependencies
+frontend/node_modules/
+
+# Vite build output
+frontend/dist/
+frontend/dist-ssr/
+
+# Environment variables
+frontend/.env
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+
+# Logs
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/pnpm-debug.log*
+
+# Editor / Vite cache
+frontend/.vite/
+frontend/.cache/
+
+
+# =============================================================================
+# DOCKER
+# =============================================================================
+
+# Docker override files (local-only overrides)
+docker-compose.override.yml
+
+
+# =============================================================================
+# EDITOR & OS
+# =============================================================================
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# JetBrains IDEs (PyCharm, WebStorm, etc.)
+.idea/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Linux
+*~
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Vim / Neovim
+*.swp
+*.swo
+[._]*.sw[a-p]
+
+
+# =============================================================================
+# MISC
+# =============================================================================
+
+# Logs
+*.log
+
+# Temp files
+*.tmp
+*.bak
+*.orig
